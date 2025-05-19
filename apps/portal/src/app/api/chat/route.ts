@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { OpenAIClient } from '@azure/openai';
-import { AzureKeyCredential } from '@azure/core-auth';
+import { AzureOpenAI } from 'openai';
 import * as mssql from 'mssql';
 
 // Configuration constants
@@ -10,11 +9,13 @@ const OPENAI_DEPLOYMENT = process.env.OPENAI_DEPLOYMENT || 'gpt-4-turbo';
 const SQL_CONNECTION_STRING = process.env.SQL_CONN || '';
 const TENANT_ID = process.env.TENANT_ID || 'demo-tenant';
 
-// Initialize OpenAI client
-const client = new OpenAIClient(
-  OPENAI_ENDPOINT,
-  new AzureKeyCredential(OPENAI_KEY)
-);
+// Initialize Azure OpenAI client
+const client = new AzureOpenAI({
+  apiKey: OPENAI_KEY,
+  endpoint: OPENAI_ENDPOINT,
+  deployment: OPENAI_DEPLOYMENT,
+  apiVersion: "2023-05-15"
+});
 
 /**
  * Get the best rate from the Tariffs table based on search criteria
@@ -139,7 +140,7 @@ export async function POST(request: NextRequest) {
     // Define the tool for getting the best rate
     const tools = [
       {
-        type: 'function',
+        type: "function" as const,
         function: {
           name: 'getBestRate',
           description: 'Get the best hotel rate based on city, category, dates, and number of people',
@@ -195,17 +196,18 @@ export async function POST(request: NextRequest) {
     const chatMessages = [systemMessage, ...messages];
 
     // Call OpenAI with the agent configuration
-    const response = await client.getChatCompletions(
-      OPENAI_DEPLOYMENT,
-      chatMessages,
-      { tools, toolChoice: 'auto' }
-    );
+    const response = await client.chat.completions.create({
+      model: OPENAI_DEPLOYMENT,
+      messages: chatMessages,
+      tools: tools,
+      tool_choice: 'auto'
+    });
 
     // Process tool calls if present
     const responseMessage = response.choices[0].message;
-    if (responseMessage.toolCalls && responseMessage.toolCalls.length > 0) {
+    if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
       // Handle tool calls
-      const toolCall = responseMessage.toolCalls[0];
+      const toolCall = responseMessage.tool_calls[0];
       if (toolCall.function?.name === 'getBestRate') {
         const args = JSON.parse(toolCall.function.arguments);
         const { city, category, start, end, pax = 1 } = args;
@@ -222,10 +224,10 @@ export async function POST(request: NextRequest) {
         });
         
         // Get the final response from the assistant
-        const finalResponse = await client.getChatCompletions(
-          OPENAI_DEPLOYMENT,
-          chatMessages
-        );
+        const finalResponse = await client.chat.completions.create({
+          model: OPENAI_DEPLOYMENT,
+          messages: chatMessages
+        });
         
         return NextResponse.json(finalResponse.choices[0].message);
       }
