@@ -2,6 +2,8 @@
 
 [![Azure Static Web App CI/CD](https://github.com/yarvindeashwar/costing-gpt/actions/workflows/azure-static-web-app.yml/badge.svg)](https://github.com/yarvindeashwar/costing-gpt/actions/workflows/azure-static-web-app.yml)
 
+[![Azure Static Web App CI/CD](https://github.com/yarvindeashwar/costing-gpt/actions/workflows/azure-static-web-app.yml/badge.svg)](https://github.com/yarvindeashwar/costing-gpt/actions/workflows/azure-static-web-app.yml)
+
 A monorepo containing:
 - `apps/portal`: Next.js 14 web portal with TypeScript and Tailwind CSS
 - `apps/functions`: Azure Functions with TypeScript
