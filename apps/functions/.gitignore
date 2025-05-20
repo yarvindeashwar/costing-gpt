@@ -20,7 +20,8 @@ project.lock.json
 /data
 .secrets
 appsettings.json
-local.settings.json
+# Temporarily allowing settings files for setup
+# local.settings.json
 
 node_modules
 dist

@@ -27,8 +27,20 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <div className="relative flex min-h-screen flex-col">
+          <div className="flex-1">
+            {/* Import is done dynamically to avoid issues with client components in server context */}
+            <HeaderWrapper />
+            <main>{children}</main>
+          </div>
+        </div>
       </body>
     </html>
   );
+}
+
+// Wrapper to handle client component in server context
+async function HeaderWrapper() {
+  const { Header } = await import('@/components/header');
+  return <Header />;
 }
