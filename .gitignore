@@ -28,8 +28,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local env files
-# Temporarily allowing env files for setup
-# .env*.local
+# Environment files
+.env*.local
 
 # IDE
 .vscode/*
@@ -44,8 +44,8 @@ logs
 *.log
 
 # Local development
-# Temporarily allowing settings files for setup
-# apps/functions/local.settings.json
+# Local settings files
+apps/functions/local.settings.json
 
 # Optional npm cache directory
 .npm
