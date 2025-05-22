@@ -46,13 +46,20 @@ export async function extractHotelTariffWithLLM(
     const messages = [
       {
         role: 'system',
-        content: 'You are an extraction assistant that outputs *only* valid JSON.'
+        content: 'You are an extraction assistant that outputs *only* valid JSON. Follow the exact format requirements.'
       },
       {
         role: 'user',
         content: `
 Extract the following fields from the text below and return exactly one JSON object with keys:
 hotelName, city, category, vendor, baseRate, gstPercent, serviceFee, mealPlan, season, startDate, endDate
+
+IMPORTANT FORMATTING REQUIREMENTS:
+1. All fields must be simple strings or numbers only, never objects or arrays
+2. mealPlan must be a single string like "Breakfast Only" or "Breakfast, Lunch, Dinner"
+3. baseRate, gstPercent, and serviceFee must be numeric values without currency symbols
+4. startDate and endDate must be in YYYY-MM-DD format
+5. If you're unsure about a value, use an empty string "" for text fields or 0 for numeric fields
 
 Text:
 ${truncatedText}`
@@ -72,6 +79,30 @@ ${truncatedText}`
     const today      = new Date().toISOString().split('T')[0];
     const inThirty   = new Date(Date.now() + 30 * 86400_000).toISOString().split('T')[0];
 
+    // Process mealPlan to ensure it's a string, even if LLM returns an object
+    let mealPlanValue = '';
+    if (data.mealPlan) {
+      if (typeof data.mealPlan === 'string') {
+        mealPlanValue = data.mealPlan;
+      } else if (typeof data.mealPlan === 'object') {
+        // If it's an object like {Breakfast: true, Lunch: true, Dinner: false}
+        // Convert it to a string like 'Breakfast, Lunch'
+        mealPlanValue = Object.entries(data.mealPlan)
+          .filter(([_, included]) => included)
+          .map(([meal]) => meal)
+          .join(', ');
+      }
+    }
+
+    // Ensure we have valid dates
+    const startDate = data.startDate && data.startDate.trim() ? data.startDate : today;
+    const endDate = data.endDate && data.endDate.trim() ? data.endDate : inThirty;
+    
+    // Validate date formats (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const validStartDate = dateRegex.test(startDate) ? startDate : today;
+    const validEndDate = dateRegex.test(endDate) ? endDate : inThirty;
+    
     const tariff: HotelTariff = {
       hotelName:  data.hotelName  ?? '',
       city:       data.city       ?? '',
@@ -80,10 +111,10 @@ ${truncatedText}`
       baseRate:   parseFloat(data.baseRate)   || 0,
       gstPercent: parseFloat(data.gstPercent) || 0,
       serviceFee: parseFloat(data.serviceFee) || 0,
-      mealPlan:   data.mealPlan   ?? '',
+      mealPlan:   mealPlanValue,
       season:     data.season     ?? '',
-      startDate:  data.startDate  ?? today,
-      endDate:    data.endDate    ?? inThirty,
+      startDate:  validStartDate,
+      endDate:    validEndDate,
       description: ''               // fill in as needed
     };
 

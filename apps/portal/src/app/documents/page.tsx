@@ -17,6 +17,8 @@ export default function DocumentsPage() {
   const [result, setResult] = useState<any>(null)
   const [tariff, setTariff] = useState<any>(null)
   const [dbResult, setDbResult] = useState<any>(null)
+  const [dbTariff, setDbTariff] = useState<any>(null)
+  const [isLoadingDbTariff, setIsLoadingDbTariff] = useState(false)
   const [activeTab, setActiveTab] = useState('text')
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -254,26 +256,100 @@ export default function DocumentsPage() {
                         <CardTitle className="text-base flex items-center gap-2">
                           Rate Information
                         </CardTitle>
+                        {dbResult?.success && dbResult?.tariffId && (
+                          <div className="mt-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={async () => {
+                                if (dbResult?.tariffId) {
+                                  setIsLoadingDbTariff(true);
+                                  try {
+                                    const response = await fetch(`/api/tariff/${dbResult.tariffId}`);
+                                    if (response.ok) {
+                                      const data = await response.json();
+                                      setDbTariff(data.tariff);
+                                    } else {
+                                      console.error('Failed to fetch tariff details');
+                                    }
+                                  } catch (error) {
+                                    console.error('Error fetching tariff details:', error);
+                                  } finally {
+                                    setIsLoadingDbTariff(false);
+                                  }
+                                }
+                              }}
+                              disabled={isLoadingDbTariff}
+                            >
+                              {isLoadingDbTariff ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Loading...
+                                </>
+                              ) : (
+                                <>View Database Record</>
+                              )}
+                            </Button>
+                          </div>
+                        )}
                       </CardHeader>
                       <CardContent>
-                        <dl className="space-y-2">
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Base Rate</dt>
-                            <dd className="text-sm">₹{tariff.baseRate.toFixed(2)}</dd>
+                        {dbTariff ? (
+                          <div className="space-y-4">
+                            <div className="bg-muted p-2 rounded-md">
+                              <p className="text-xs text-muted-foreground mb-2">Showing actual data from database (ID: {dbTariff.id})</p>
+                              <dl className="space-y-2">
+                                <div>
+                                  <dt className="text-sm font-medium text-muted-foreground">Base Rate</dt>
+                                  <dd className="text-sm">₹{dbTariff.baseRate.toFixed(2)}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-sm font-medium text-muted-foreground">Tax Percent</dt>
+                                  <dd className="text-sm">{dbTariff.taxPercent}%</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-sm font-medium text-muted-foreground">Service Fee</dt>
+                                  <dd className="text-sm">₹{dbTariff.serviceFee.toFixed(2)}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-sm font-medium text-muted-foreground">Meal Plan</dt>
+                                  <dd className="text-sm">{dbTariff.ratePlan.mealPlan}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-sm font-medium text-muted-foreground">Room Type</dt>
+                                  <dd className="text-sm">{dbTariff.roomType.name}</dd>
+                                </div>
+                              </dl>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => setDbTariff(null)}
+                              className="w-full text-xs"
+                            >
+                              Show Extracted Data
+                            </Button>
                           </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">GST</dt>
-                            <dd className="text-sm">{tariff.gstPercent}%</dd>
-                          </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Service Fee</dt>
-                            <dd className="text-sm">₹{tariff.serviceFee.toFixed(2)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Meal Plan</dt>
-                            <dd className="text-sm">{tariff.mealPlan}</dd>
-                          </div>
-                        </dl>
+                        ) : (
+                          <dl className="space-y-2">
+                            <div>
+                              <dt className="text-sm font-medium text-muted-foreground">Base Rate</dt>
+                              <dd className="text-sm">₹{tariff.baseRate.toFixed(2)}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-sm font-medium text-muted-foreground">GST</dt>
+                              <dd className="text-sm">{tariff.gstPercent}%</dd>
+                            </div>
+                            <div>
+                              <dt className="text-sm font-medium text-muted-foreground">Service Fee</dt>
+                              <dd className="text-sm">₹{tariff.serviceFee.toFixed(2)}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-sm font-medium text-muted-foreground">Meal Plan</dt>
+                              <dd className="text-sm">{tariff.mealPlan}</dd>
+                            </div>
+                          </dl>
+                        )}
                       </CardContent>
                     </Card>
                     
@@ -284,22 +360,43 @@ export default function DocumentsPage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <dl className="space-y-2">
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Season</dt>
-                            <dd className="text-sm">
-                              <Badge variant="outline">{tariff.season}</Badge>
-                            </dd>
+                        {dbTariff ? (
+                          <div className="bg-muted p-2 rounded-md">
+                            <dl className="space-y-2">
+                              <div>
+                                <dt className="text-sm font-medium text-muted-foreground">Season</dt>
+                                <dd className="text-sm">
+                                  <Badge variant="outline">{dbTariff.season.name}</Badge>
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-sm font-medium text-muted-foreground">Valid From</dt>
+                                <dd className="text-sm">{new Date(dbTariff.season.startDate).toLocaleDateString()}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-sm font-medium text-muted-foreground">Valid To</dt>
+                                <dd className="text-sm">{new Date(dbTariff.season.endDate).toLocaleDateString()}</dd>
+                              </div>
+                            </dl>
                           </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Valid From</dt>
-                            <dd className="text-sm">{new Date(tariff.startDate).toLocaleDateString()}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-sm font-medium text-muted-foreground">Valid To</dt>
-                            <dd className="text-sm">{new Date(tariff.endDate).toLocaleDateString()}</dd>
-                          </div>
-                        </dl>
+                        ) : (
+                          <dl className="space-y-2">
+                            <div>
+                              <dt className="text-sm font-medium text-muted-foreground">Season</dt>
+                              <dd className="text-sm">
+                                <Badge variant="outline">{tariff.season}</Badge>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-sm font-medium text-muted-foreground">Valid From</dt>
+                              <dd className="text-sm">{new Date(tariff.startDate).toLocaleDateString()}</dd>
+                            </div>
+                            <div>
+                              <dt className="text-sm font-medium text-muted-foreground">Valid To</dt>
+                              <dd className="text-sm">{new Date(tariff.endDate).toLocaleDateString()}</dd>
+                            </div>
+                          </dl>
+                        )}
                       </CardContent>
                     </Card>
                     
