@@ -27,6 +27,8 @@
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "envalid": "^8.0.0",
+    "kysely": "^0.28.2",
     "lucide-react": "^0.511.0",
     "mssql": "^11.0.1",
     "next": "15.3.2",
@@ -35,6 +37,7 @@
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.8",
     "tailwind-merge": "^3.3.0",
+    "zod": "^3.25.7",
     "zustand": "^5.0.4"
   },
   "devDependencies": {

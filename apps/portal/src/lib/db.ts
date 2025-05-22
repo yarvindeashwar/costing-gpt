@@ -24,8 +24,38 @@ let pool: sql.ConnectionPool | null = null;
 export async function getPool(): Promise<sql.ConnectionPool> {
   if (!pool) {
     try {
-      pool = await new sql.ConnectionPool(SQL_CONN).connect();
-      console.log("Connected to SQL database");
+      // Verify Azure AD authentication credentials are available
+      if (!process.env.AZURE_CLIENT_ID) {
+        console.error("Azure Client ID is not set. Please set AZURE_CLIENT_ID in your environment variables.");
+        throw new Error("Azure Client ID is not set");
+      }
+
+      // Configure SQL connection with Azure AD Default authentication
+      const config: sql.config = {
+        server: 'gptsqlsrv.database.windows.net',
+        database: 'costingdb',
+        authentication: {
+          type: 'azure-active-directory-default',
+          options: {
+            clientId: process.env.AZURE_CLIENT_ID,
+            tenantId: process.env.AZURE_TENANT_ID // Optional, only needed in some configurations
+          }
+        },
+        options: {
+          encrypt: true,
+          trustServerCertificate: false,
+          connectTimeout: 30000,
+          enableArithAbort: true // Recommended for Azure SQL
+        }
+      };
+      
+      console.log('Attempting to connect with Azure AD authentication...');
+      console.log('Using client ID:', process.env.AZURE_CLIENT_ID ? 'Client ID is set' : 'Client ID is NOT set');
+      console.log('Using tenant ID:', process.env.AZURE_TENANT_ID ? 'Tenant ID is set' : 'Tenant ID is NOT set');
+      
+      // Use Azure AD authentication exclusively
+      pool = await new sql.ConnectionPool(config).connect();
+      console.log("Connected to SQL database using Azure AD Default authentication");
     } catch (error) {
       console.error("Error connecting to SQL database:", error);
       throw error;
@@ -41,7 +71,14 @@ export async function getPool(): Promise<sql.ConnectionPool> {
 export async function setTenantContext(pool: sql.ConnectionPool): Promise<void> {
   try {
     await pool.request().query(`EXEC app.sp_set_tenant_context @TenantId = '${TENANT_ID}'`);
-  } catch (error) {
+  } catch (error: any) {
+    // Check if the error is due to missing stored procedure
+    if (error.number === 2812) { // SQL Server error code for "Could not find stored procedure"
+      console.warn("Stored procedure 'app.sp_set_tenant_context' not found. Continuing without setting tenant context.");
+      // Continue without setting tenant context
+      return;
+    }
+    
     console.error("Error setting tenant context:", error);
     throw error;
   }
@@ -143,11 +180,90 @@ async function getVendorId(vendorName: string): Promise<number | null> {
  * @param tariff The hotel tariff information
  * @returns Object indicating success or failure
  */
-export async function saveHotelTariff(tariff: HotelTariff): Promise<{ success: boolean; message: string; tariffId?: number }> {
+export async function saveHotelTariff(tariff: HotelTariff): Promise<{ success: boolean; message: string; tariffId?: number; error?: any }> {
   try {
     // Get database connection
     const pool = await getPool();
     await setTenantContext(pool);
+    
+    // Log the tariff data for debugging
+    console.log('Attempting to save tariff data:', JSON.stringify(tariff, null, 2));
+    
+    // Check if product (hotel) exists
+    try {
+      // Check if the Products table exists
+      const tableCheck = await pool.request().query(`
+        SELECT OBJECT_ID('app.Products') AS TableExists
+      `);
+      
+      if (!tableCheck.recordset[0].TableExists) {
+        console.warn('Table app.Products does not exist. Creating required tables...');
+        
+        // Create schema if it doesn't exist
+        await pool.request().query(`
+          IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'app')
+          BEGIN
+            EXEC('CREATE SCHEMA app')
+          END
+        `);
+        
+        // Create Products table
+        await pool.request().query(`
+          CREATE TABLE app.Products (
+            ProductId INT IDENTITY(1,1) PRIMARY KEY,
+            TenantId NVARCHAR(50) NOT NULL,
+            ProductName NVARCHAR(255) NOT NULL,
+            City NVARCHAR(100) NOT NULL,
+            Category NVARCHAR(50) NOT NULL,
+            ProductType NVARCHAR(50) NOT NULL,
+            CreatedAt DATETIME DEFAULT GETDATE(),
+            UpdatedAt DATETIME DEFAULT GETDATE()
+          )
+        `);
+        
+        // Create Vendors table
+        await pool.request().query(`
+          CREATE TABLE app.Vendors (
+            VendorId INT IDENTITY(1,1) PRIMARY KEY,
+            TenantId NVARCHAR(50) NOT NULL,
+            VendorName NVARCHAR(255) NOT NULL,
+            CreatedAt DATETIME DEFAULT GETDATE(),
+            UpdatedAt DATETIME DEFAULT GETDATE()
+          )
+        `);
+        
+        // Create Tariffs table
+        await pool.request().query(`
+          CREATE TABLE app.Tariffs (
+            TariffId INT IDENTITY(1,1) PRIMARY KEY,
+            TenantId NVARCHAR(50) NOT NULL,
+            ProductId INT NOT NULL,
+            VendorId INT NOT NULL,
+            BaseRate DECIMAL(10, 2) NOT NULL,
+            GSTPercent DECIMAL(5, 2) NOT NULL,
+            ServiceFee DECIMAL(10, 2) NOT NULL,
+            MealPlan NVARCHAR(100) NOT NULL,
+            Season NVARCHAR(50) NOT NULL,
+            StartDate DATE NOT NULL,
+            EndDate DATE NOT NULL,
+            Description NVARCHAR(MAX),
+            CreatedAt DATETIME DEFAULT GETDATE(),
+            UpdatedAt DATETIME DEFAULT GETDATE(),
+            FOREIGN KEY (ProductId) REFERENCES app.Products(ProductId),
+            FOREIGN KEY (VendorId) REFERENCES app.Vendors(VendorId)
+          )
+        `);
+        
+        console.log('Required tables created successfully');
+      }
+    } catch (schemaError: any) {
+      console.error('Error checking or creating schema:', schemaError);
+      return { 
+        success: false, 
+        message: `Database schema error: ${schemaError.message}`,
+        error: schemaError
+      };
+    }
     
     // Check if product (hotel) exists
     const productId = await getProductId(tariff.hotelName, tariff.city, tariff.category);
@@ -243,11 +359,12 @@ export async function saveHotelTariff(tariff: HotelTariff): Promise<{ success: b
         tariffId 
       };
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving hotel tariff:', error);
     return { 
       success: false, 
-      message: `Failed to save hotel tariff: ${(error as Error).message}` 
+      message: `Failed to save hotel tariff: ${error.message}`,
+      error: error
     };
   }
 }
